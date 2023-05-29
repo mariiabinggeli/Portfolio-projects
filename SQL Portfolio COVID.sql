@@ -7,8 +7,6 @@ ORDER BY 3,4
 --FROM Portfolioprojectcovid.dbo.CovidVaccinations$
 --ORDER BY 3,4
 
---Select Data we going to be looking at
-
 SELECT Location, date, total_cases, new_cases,total_deaths
 FROM Portfolioprojectcovid.dbo.CovidDeaths$
 order by 1,2
