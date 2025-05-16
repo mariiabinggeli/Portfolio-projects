@@ -1,0 +1,495 @@
+#Exploratory analysis
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd # Import pandas to work with DataFrames
+
+# Assuming your data is in a CSV file named 'diabetes.csv'
+df = pd.read_csv('diabetes.csv') # Load data into a DataFrame named 'df'
+
+# Outcome distribution
+plt.figure(figsize=(6,4))
+sns.countplot(x='Outcome', data=df)
+plt.title('Distribution of Diabetes Outcome')
+plt.xlabel('Diabetes (1 = Yes, 0 = No)')
+plt.ylabel('Count')
+plt.show()
+
+# Glucose distribution by outcome
+plt.figure(figsize=(10,5))
+plt.subplot(1,2,1)
+sns.histplot(df['Glucose'], kde=True)
+plt.title('Glucose Distribution')
+
+plt.subplot(1,2,2)
+sns.boxplot(x='Outcome', y='Glucose', data=df)
+plt.title('Glucose by Diabetes Status')
+plt.tight_layout()
+plt.show()
+
+# BMI distribution by outcome
+plt.figure(figsize=(10,5))
+plt.subplot(1,2,1)
+sns.histplot(df['BMI'], kde=True)
+plt.title('BMI Distribution')
+
+plt.subplot(1,2,2)
+sns.boxplot(x='Outcome', y='BMI', data=df)
+plt.title('BMI by Diabetes Status')
+plt.tight_layout()
+plt.show()
+
+# Age distribution by outcome
+plt.figure(figsize=(10,5))
+plt.subplot(1,2,1)
+sns.histplot(df['Age'], kde=True, bins=20)
+plt.title('Age Distribution')
+
+plt.subplot(1,2,2)
+sns.boxplot(x='Outcome', y='Age', data=df)
+plt.title('Age by Diabetes Status')
+plt.tight_layout()
+plt.show()
+
+# Correlation matrix
+plt.figure(figsize=(10,8))
+sns.heatmap(df.corr(), annot=True, cmap='coolwarm', center=0)
+plt.title('Correlation Matrix')
+plt.show()
+
+# Count zeros in key variables
+zeros = {
+    'Glucose': (df['Glucose'] == 0).sum(),
+    'BloodPressure': (df['BloodPressure'] == 0).sum(),
+    'SkinThickness': (df['SkinThickness'] == 0).sum(),
+    'Insulin': (df['Insulin'] == 0).sum(),
+    'BMI': (df['BMI'] == 0).sum()
+}
+print("Zero values count:\n", zeros)
+
+#preprocessing
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+
+# Replace zeros with NaN in key columns
+zero_to_nan_cols = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+df[zero_to_nan_cols] = df[zero_to_nan_cols].replace(0, np.nan)
+
+# Impute missing values with median (more robust than mean for medical data)
+imputer = SimpleImputer(strategy='median')
+df[zero_to_nan_cols] = imputer.fit_transform(df[zero_to_nan_cols])
+
+# Feature egineering
+# Age categories
+df['AgeGroup'] = pd.cut(df['Age'],
+                       bins=[20, 30, 40, 50, 60, 70, 80],
+                       labels=['20-29', '30-39', '40-49', '50-59', '60-69', '70-79'])
+
+# BMI categories (WHO standards)
+df['BMICategory'] = pd.cut(df['BMI'],
+                          bins=[0, 18.5, 25, 30, 35, 40, 100],
+                          labels=['Underweight', 'Normal', 'Overweight',
+                                 'Obese I', 'Obese II', 'Obese III'])
+
+# Glucose categories
+df['GlucoseCategory'] = pd.cut(df['Glucose'],
+                              bins=[0, 70, 100, 125, 200, 300],
+                              labels=['Hypoglycemia', 'Normal', 'Prediabetes',
+                                     'Diabetes', 'Severe Hyperglycemia'])
+
+# Interaction terms
+df['Glucose_BMI'] = df['Glucose'] * df['BMI']
+df['Age_Insulin'] = df['Age'] * df['Insulin']
+
+
+#feature scaling
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(df[['Glucose', 'BloodPressure', 'SkinThickness',
+                                         'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']])
+df_scaled = pd.DataFrame(scaled_features, columns=['Glucose_scaled', 'BP_scaled', 'SkinThickness_scaled',
+                                                 'Insulin_scaled', 'BMI_scaled', 'DPF_scaled', 'Age_scaled'])
+df = pd.concat([df, df_scaled], axis=1)
+
+# No scaling needed for tree-based models
+# But we'll one-hot encode categorical variables
+df = pd.get_dummies(df, columns=['AgeGroup', 'BMICategory', 'GlucoseCategory'], drop_first=True)
+
+#Handling class imbalance
+from imblearn.over_sampling import SMOTE
+
+X = df.drop('Outcome', axis=1)
+y = df['Outcome']
+
+smote = SMOTE(random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X, y)
+
+Feature selection
+from sklearn.feature_selection import SelectKBest, f_classif
+
+# Select top 5 features
+selector = SelectKBest(score_func=f_classif, k=5)
+X_selected = selector.fit_transform(X, y)
+
+# Get selected feature names
+selected_features = X.columns[selector.get_support()]
+print("Selected Features:", selected_features)
+
+#Train test split
+from sklearn.model_selection import train_test_split
+
+# Using the selected features
+X_train, X_test, y_train, y_test = train_test_split(
+    X[selected_features], y, test_size=0.2, random_state=42, stratify=y)
+
+from sklearn.model_selection import train_test_split
+
+# Assuming X and y are defined in previous cells
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y)
+
+X = df.drop('Outcome', axis=1)  # Features
+y = df['Outcome']              # Target variable
+
+#Model specific preprocessing
+from sklearn.model_selection import train_test_split
+
+# Assuming X and y are defined in previous cells
+# Selecting only numeric features for VIF calculation
+numerical_features = X_train.select_dtypes(include=np.number).columns
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y)
+
+X = df.drop('Outcome', axis=1)  # Features
+y = df['Outcome']              # Target variable
+
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Calculating VIF for each feature
+vif_data = pd.DataFrame()
+vif_data["feature"] = numerical_features # Use only numerical features
+vif_data["VIF"] = [variance_inflation_factor(X_train[numerical_features].values, i)
+                   for i in range(len(numerical_features))] # Iterate over numerical features only
+
+print(vif_data)
+
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder # Import OneHotEncoder
+from sklearn.feature_selection import SelectKBest, f_classif # Import SelectKBest
+
+# Define numeric and categorical features
+numeric_features = ['Glucose', 'BloodPressure', 'SkinThickness',
+                   'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
+categorical_features = ['AgeGroup', 'BMICategory', 'GlucoseCategory']
+
+# Create transformers
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())])
+
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
+
+# Combine transformers
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)])
+
+# Full pipeline with preprocessing
+full_pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('feature_selection', SelectKBest(score_func=f_classif, k=5)),
+    ('smote', SMOTE(random_state=42))])
+
+import joblib
+
+# Make sure 'selector' is defined in this cell or globally
+from sklearn.feature_selection import SelectKBest, f_classif  # Import if needed
+
+# If you've used it in a previous cell, you might need to re-instantiate it:
+selector = SelectKBest(score_func=f_classif, k=5) # Assuming k=5 as before
+
+joblib.dump(imputer, 'imputer.joblib')
+joblib.dump(scaler, 'scaler.joblib')
+joblib.dump(selector, 'feature_selector.joblib')
+joblib.dump(preprocessor, 'preprocessor.joblib')
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+import pandas as pd
+
+# Split data into training and testing sets
+
+models = {
+    "Logistic Regression": LogisticRegression(random_state=42, class_weight='balanced'),
+    "Random Forest": RandomForestClassifier(random_state=42, class_weight='balanced'),
+    "XGBoost": XGBClassifier(random_state=42, scale_pos_weight=1.6),  # Adjusted for class imbalance
+    "SVM": SVC(random_state=42),
+}
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+import pandas as pd
+
+
+models = {
+    "Logistic Regression": LogisticRegression(random_state=42, class_weight='balanced'),
+    "Random Forest": RandomForestClassifier(random_state=42, class_weight='balanced'),
+    "XGBoost": XGBClassifier(random_state=42, scale_pos_weight=1.6),  # Adjusted for class imbalance
+    "SVM": SVC(random_state=42),}
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error
+
+data = pd.read_csv('diabetes.csv')
+X = data.drop('BloodPressure', axis=1)
+y = data['BloodPressure']
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+params_xgb = {
+    'n_estimators': [50, 100, 150],
+    'max_depth': [3, 5, 7],
+    'learning_rate': [0.01, 0.1, 0.2],
+    'subsample': [0.8, 0.9, 1.0],
+    'colsample_bytree': [0.8, 0.9, 1.0],
+    'gamma': [0, 0.1, 0.2],
+}
+
+xgb = XGBRegressor(random_state=42)
+grid_xgb = GridSearchCV(xgb, params_xgb, cv=5, scoring='neg_mean_squared_error', n_jobs=-1)  # Use appropriate scoring
+grid_xgb.fit(X_train, y_train)
+
+best_xgb = grid_xgb.best_estimator_
+y_pred_xgb = best_xgb.predict(X_test)
+
+print("Best XGBoost Params:", grid_xgb.best_params_)
+print("XGBoost MSE:", mean_squared_error(y_test, y_pred_xgb))
+
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import f1_score
+
+
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import f1_score
+
+
+params_xgb = {
+    'n_estimators': [50, 100, 150],
+    'max_depth': [3,5,7]
+}
+
+!pip install xgboost
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import f1_score # Changed 'f' to 'f1_score' to import the F1-score function
+
+params_rf = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 5, 10, 15],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'class_weight': ['balanced', None]
+}
+
+rf = RandomForestClassifier(random_state=42)
+grid_rf = GridSearchCV(rf, params_rf, cv=5, scoring='f1', n_jobs=-1)
+grid_rf.fit(X_train, y_train)
+
+best_rf = grid_rf.best_estimator_
+y_pred_rf = best_rf.predict(X_test)
+
+print("Best RF Params:", grid_rf.best_params_)
+print("RF F1-Score:", f1_score(y_test, y_pred_rf))
+
+params_lr = {
+    'penalty': ['l2'],
+    'C': [0.001, 0.01, 0.1, 1, 10, 100],
+    'solver': ['lbfgs', 'liblinear']
+}
+
+lr = LogisticRegression(random_state=42, class_weight='balanced')
+grid_lr = GridSearchCV(lr, params_lr, cv=5, scoring='f1', n_jobs=-1)
+grid_lr.fit(X_train, y_train)
+
+best_lr = grid_lr.best_estimator_
+y_pred_lr = best_lr.predict(X_test)
+
+print("Best LR Params:", grid_lr.best_params_)
+print("LR F1-Score:", f1_score(y_test, y_pred_lr))
+
+import joblib
+joblib.dump(best_xgb, 'diabetes_xgb_model.pkl')
+
+#Model summary
+import pandas as pd
+import joblib
+df = pd.read_csv('diabetes.csv')
+from xgboost import plot_tree
+import matplotlib.pyplot as plt
+
+# Load the best XGBoost model
+best_xgb = joblib.load('diabetes_xgb_model.pkl')
+
+# Print model parameters
+print("=== Model Parameters ===")
+print(best_xgb.get_params())
+
+# Print number of trees
+print("\n=== Model Structure ===")
+print(f"Number of trees: {best_xgb.n_estimators}")
+print(f"Max depth per tree: {best_xgb.max_depth}")
+print(f"Learning rate: {best_xgb.learning_rate}")
+
+from xgboost import plot_importance
+
+plt.figure(figsize=(10, 6))
+plot_importance(best_xgb, importance_type='gain', max_num_features=10)
+plt.title("XGBoost Feature Importance (Gain)")
+plt.show()
+
+importance_df = pd.DataFrame({
+    'Feature': X_train.columns,
+    'Gain': best_xgb.feature_importances_,
+    'Weight': best_xgb.get_booster().get_score(importance_type='weight'),
+    'Cover': best_xgb.get_booster().get_score(importance_type='cover')
+}).sort_values(by='Gain', ascending=False)
+
+print(importance_df.head(10))
+
+plt.figure(figsize=(20, 10))
+plot_tree(best_xgb, num_trees=0, rankdir='LR')  # First tree
+plt.title("First Tree in XGBoost Ensemble")
+plt.show()
+
+from sklearn.decomposition import PCA
+
+# Reduce to 2D for visualization
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_train)
+
+# Plot decision boundaries
+plt.figure(figsize=(10, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_train, cmap='coolwarm', alpha=0.6)
+plt.title("Decision Boundary (PCA Reduced)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.colorbar(label="Diabetes (1=Yes, 0=No)")
+plt.show()
+
+from sklearn.calibration import calibration_curve
+
+probabilities = best_xgb.predict_proba(X_test)[:, 1]
+true_prob, pred_prob = calibration_curve(y_test, probabilities, n_bins=10)
+
+plt.figure(figsize=(8, 6))
+plt.plot(pred_prob, true_prob, marker='o', label='XGBoost')
+plt.plot([0, 1], [0, 1], linestyle='--', label='Perfectly Calibrated')
+plt.xlabel("Predicted Probability")
+plt.ylabel("True Probability")
+plt.title("Calibration Curve")
+plt.legend()
+plt.show()
+
+import shap
+
+explainer = shap.TreeExplainer(best_xgb)
+shap_values = explainer.shap_values(X_test)
+
+# Summary plot
+shap.summary_plot(shap_values, X_test, plot_type="bar")
+
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+y_pred = best_xgb.predict(X_test)
+cm = confusion_matrix(y_test, y_pred)
+
+disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                             display_labels=['Non-Diabetic', 'Diabetic'])
+disp.plot(cmap='Blues')
+plt.title('Confusion Matrix')
+plt.show()
+
+from sklearn.metrics import classification_report
+
+print(classification_report(y_test, y_pred,
+                           target_names=['Non-Diabetic', 'Diabetic']))
+
+from sklearn.metrics import roc_curve, roc_auc_score
+
+y_probs = best_xgb.predict_proba(X_test)[:, 1]
+fpr, tpr, thresholds = roc_curve(y_test, y_probs)
+auc_score = roc_auc_score(y_test, y_probs)
+
+plt.figure(figsize=(8,6))
+plt.plot(fpr, tpr, label=f'XGBoost (AUC = {auc_score:.2f})')
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve')
+plt.legend()
+plt.show()
+
+from sklearn.metrics import precision_recall_curve
+
+precision, recall, _ = precision_recall_curve(y_test, y_probs)
+plt.figure(figsize=(8,6))
+plt.plot(recall, precision, marker='.')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.title('Precision-Recall Curve')
+plt.show()
+
+# Calculate Youden's J statistic
+J = tpr - fpr
+ix = np.argmax(J)
+best_thresh = thresholds[ix]
+
+print(f'Optimal Threshold: {best_thresh:.2f}')
+print(f'Sensitivity at threshold: {tpr[ix]:.2f}')
+print(f'Specificity at threshold: {1-fpr[ix]:.2f}')
+
+from sklearn.metrics import balanced_accuracy_score
+
+print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.2f}")
+print(f"Diabetic Class Recall: {recall_score(y_test, y_pred):.2f}")
+print(f"Non-Diabetic Class Recall: {recall_score(y_test, y_pred, pos_label=0):.2f}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
